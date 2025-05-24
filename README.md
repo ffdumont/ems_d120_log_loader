@@ -121,6 +121,11 @@ output_path/
 
 ---
 
+## References
+- https://dynonavionics.com/d10-d100-series-documentation.php
+
+---
+
 ## Requirements
 - Python 3.8+
 - matplotlib, numpy (see `requirements.txt`)
