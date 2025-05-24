@@ -1,0 +1,27 @@
+{
+  "charts": {
+    "engine_performance": {
+      "label": "Engine Performance",
+      "y_axes": [
+        { "column": "rpm", "label": "RPM" },
+        { "column": "man_pres", "label": "Manifold Pressure (inHg)" },
+        { "column": "egt_1", "label": "EGT Cylinder 1 (°F)" }
+      ]
+    },
+    "climb_profile": {
+      "label": "Climb Profile",
+      "y_axes": [
+        { "column": "gps_alt", "label": "Altitude (ft)" },
+        { "column": "grnd_spd", "label": "Ground Speed (kts)" }
+      ]
+    },
+    "electrical_performance": {
+      "label": "Electrical Performance",
+      "y_axes": [
+        { "column": "rpm", "label": "RPM", "axis": 0 },
+        { "column": "volts", "label": "Voltage (V)", "axis": 1 },
+        { "column": "amps", "label": "Current (A)", "axis": 2 }
+      ]
+    }
+  }
+}
