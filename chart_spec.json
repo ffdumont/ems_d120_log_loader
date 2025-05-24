@@ -50,7 +50,7 @@
     },
     "electrical_performance": {
       "label": "Electrical Performance",
-      "smooth": 0,
+      "smooth": 7,
       "y_axes": [
         { "column": "rpm", "label": "RPM", "axis": 0 },
         { "column": "volts", "label": "Voltage (V)", "axis": 1 },

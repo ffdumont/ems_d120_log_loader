@@ -18,8 +18,6 @@ def parse_args():
     parser.add_argument('--output', type=str, help='Output PNG file (optional)')
     parser.add_argument('--analyze', action='store_true', help='Print statistical summary for each Y variable')
     parser.add_argument('--csv', type=str, help='Export statistical summary to CSV file (optional)')
-    parser.add_argument('--smooth', action='store_true', help='Apply centered moving average smoothing to plot data')
-    parser.add_argument('--window-size', type=int, default=5, help='Window size for smoothing (default: 5)')
     return parser.parse_args()
 
 
@@ -223,12 +221,12 @@ def main():
                 y_data[i].append(float(str(val).replace(',', '.')) if val not in (None, '', 'N/A') else None)
             except Exception:
                 y_data[i].append(None)
-    # Smoothing (for plot only)
-    if hasattr(args, 'smooth') and args.smooth:
-        window_size = getattr(args, 'window_size', 5) or 5
+    # Smoothing (for plot only) - only use chart_spec['smooth']
+    window_size = chart_spec.get('smooth', 0)
+    if window_size and window_size > 1:
         y_data_smoothed = [moving_average_centered(yd, window_size) for yd in y_data]
         plot_y_data = y_data_smoothed
-        title_suffix = " (smoothed)"
+        title_suffix = f" (smoothed, window={window_size})"
     else:
         plot_y_data = y_data
         title_suffix = ""
@@ -298,18 +296,4 @@ def main():
     conn.close()
 
 if __name__ == "__main__":
-    # Add --csv, --smooth, --window-size arguments to parser
-    import sys
-    import argparse as _argparse
-    def _patched_parse_args():
-        parser = _argparse.ArgumentParser(description="Generate flight chart from SQLite data and chart spec.")
-        parser.add_argument('--flight', type=int, required=True, help='Flight ID (from flight_segments)')
-        parser.add_argument('--chart', type=str, required=True, help='Chart type (from chart_spec.json)')
-        parser.add_argument('--output', type=str, help='Output PNG file (optional)')
-        parser.add_argument('--analyze', action='store_true', help='Print statistical summary for each Y variable')
-        parser.add_argument('--csv', type=str, help='Export statistical summary to CSV file (optional)')
-        parser.add_argument('--smooth', action='store_true', help='Apply centered moving average smoothing to plot data')
-        parser.add_argument('--window-size', type=int, default=5, help='Window size for smoothing (default: 5)')
-        return parser.parse_args()
-    parse_args = _patched_parse_args
     main()
