@@ -46,7 +46,8 @@ rows = cursor.fetchall()
 with open(CSV_PATH, 'w', newline='', encoding='utf-8') as f:
     writer = csv.writer(f, delimiter=';', quoting=csv.QUOTE_MINIMAL)
     writer.writerow(headers)
-    for row in rows:
+    row_count = 0
+    for idx, row in enumerate(rows, 1):
         # Remove rows with all fields empty or with timestamp '0000-00-00T00:00:00'
         if len(row) > 0 and row[0] == '0000-00-00T00:00:00':
             continue
@@ -60,6 +61,10 @@ with open(CSV_PATH, 'w', newline='', encoding='utf-8') as f:
             else:
                 out_row.append(v)
         writer.writerow(out_row)
+        row_count += 1
+        if row_count % 1000 == 0:
+            print(f"Exported {row_count} rows...")
+
+print(f"Exported {row_count} rows to {CSV_PATH}")
 
 conn.close()
-print(f"Exported {len(rows)} rows to {CSV_PATH}")
