@@ -18,6 +18,8 @@ def parse_args():
     parser.add_argument('--output', type=str, help='Output PNG file (optional)')
     parser.add_argument('--analyze', action='store_true', help='Print statistical summary for each Y variable')
     parser.add_argument('--csv', type=str, help='Export statistical summary to CSV file (optional)')
+    parser.add_argument('--smooth', action='store_true', help='Apply centered moving average smoothing to plot data')
+    parser.add_argument('--window-size', type=int, default=5, help='Window size for smoothing (default: 5)')
     return parser.parse_args()
 
 
@@ -155,6 +157,25 @@ def print_stats_table(stats: dict, csv_path: str = None, flight_info: dict = Non
         print(f"Statistical summary exported to {csv_path}")
 
 
+def moving_average_centered(data, window_size=5):
+    """Apply centered moving average smoothing, skipping None values."""
+    if window_size < 2:
+        return data[:]
+    n = len(data)
+    half = window_size // 2
+    smoothed = []
+    for i in range(n):
+        # Determine window bounds
+        start = max(0, i - half)
+        end = min(n, i + half + 1)
+        window = [x for x in data[start:end] if x is not None]
+        if window:
+            smoothed.append(sum(window) / len(window))
+        else:
+            smoothed.append(data[i])  # fallback to original if all None
+    return smoothed
+
+
 def main():
     args = parse_args()
     chart_spec = load_chart_spec(args.chart)
@@ -188,6 +209,15 @@ def main():
                 y_data[i].append(float(str(val).replace(',', '.')) if val not in (None, '', 'N/A') else None)
             except Exception:
                 y_data[i].append(None)
+    # Smoothing (for plot only)
+    if hasattr(args, 'smooth') and args.smooth:
+        window_size = getattr(args, 'window_size', 5) or 5
+        y_data_smoothed = [moving_average_centered(yd, window_size) for yd in y_data]
+        plot_y_data = y_data_smoothed
+        title_suffix = " (smoothed)"
+    else:
+        plot_y_data = y_data
+        title_suffix = ""
     # Plot with support for multiple y-axes
     # Prepare axis assignment and colors
     axis_indices = [y.get('axis', i) for i, y in enumerate(y_axes)]
@@ -205,7 +235,7 @@ def main():
     ax2.spines['right'].set_position(('axes', 1.0))  # First right Y-axis
     # Plot each series on its assigned axis
     line_handles = []
-    for i, y in enumerate(y_data):
+    for i, y in enumerate(plot_y_data):
         axis_idx = axis_indices[i]
         ax = axes[axis_idx]
         color = axis_colors[axis_idx % len(axis_colors)]
@@ -223,28 +253,39 @@ def main():
     if axes[2]:
         axes[2].set_ylabel(y_labels[axis_indices.index(2)])
     # Title
-    title = f"Flight {args.flight}: {chart_spec.get('label', args.chart)}\n{flight['start_timestamp']} to {flight['end_timestamp']}"
+    title = f"Flight {args.flight}: {chart_spec.get('label', args.chart)}{title_suffix}\n{flight['start_timestamp']} to {flight['end_timestamp']}"
     plt.title(title)
     # Combine all legend entries
     labs = [l.get_label() for l in line_handles]
     plt.legend(line_handles, labs, loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=3)
     plt.tight_layout(rect=[0, 0.08, 1, 1])
-    if args.output:
-        plt.savefig(args.output, bbox_inches='tight')
-        print(f"Chart saved to {args.output}")
-    else:
+    # Save chart as PNG automatically if --output not specified
+    output_path = args.output
+    if not output_path:
+        output_path = f"chart_{args.chart}_flight{args.flight}.png"
+    plt.savefig(output_path, bbox_inches='tight')
+    print(f"Chart saved to {output_path}")
+    if not args.output:
         plt.show()
     # Optional analysis
     if hasattr(args, 'analyze') and args.analyze:
         data_dict = {ycol: y_data[i] for i, ycol in enumerate(y_columns)}
         stats = analyze_chart_data(data_dict)
         print("\nStatistical summary:")
-        csv_path = args.csv if hasattr(args, 'csv') and args.csv else None
+        # Determine CSV path
+        csv_path = None
+        if hasattr(args, 'csv') and args.csv:
+            if args.csv.lower() == 'auto':
+                csv_path = f"stats_{args.chart}_flight{args.flight}.csv"
+            else:
+                csv_path = args.csv
+        elif hasattr(args, 'csv'):
+            csv_path = f"stats_{args.chart}_flight{args.flight}.csv"
         print_stats_table(stats, csv_path=csv_path, flight_info=flight)
     conn.close()
 
 if __name__ == "__main__":
-    # Add --csv argument to parser
+    # Add --csv, --smooth, --window-size arguments to parser
     import sys
     import argparse as _argparse
     def _patched_parse_args():
@@ -254,6 +295,8 @@ if __name__ == "__main__":
         parser.add_argument('--output', type=str, help='Output PNG file (optional)')
         parser.add_argument('--analyze', action='store_true', help='Print statistical summary for each Y variable')
         parser.add_argument('--csv', type=str, help='Export statistical summary to CSV file (optional)')
+        parser.add_argument('--smooth', action='store_true', help='Apply centered moving average smoothing to plot data')
+        parser.add_argument('--window-size', type=int, default=5, help='Window size for smoothing (default: 5)')
         return parser.parse_args()
     parse_args = _patched_parse_args
     main()
