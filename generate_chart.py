@@ -324,7 +324,29 @@ def main():
         for i, y in enumerate(plot_y_data):
             axis_idx = axis_indices[i]
             ax = axes[axis_idx]
-            color = axis_colors[axis_idx % len(axis_colors)]
+            color = None
+            # Try to get color from config for all charts
+            if 'y_groups' in chart_spec:
+                group_idx = 0
+                group_series_idx = i
+                count = 0
+                for gidx, group in enumerate(chart_spec['y_groups']):
+                    n = len(group['series'])
+                    if count + n > i:
+                        group_idx = gidx
+                        group_series_idx = i - count
+                        break
+                    count += n
+                series_cfg = chart_spec['y_groups'][group_idx]['series'][group_series_idx]
+                color = series_cfg.get('color')
+            elif 'y_axes' in chart_spec:
+                if i < len(chart_spec['y_axes']):
+                    color = chart_spec['y_axes'][i].get('color')
+            if not color:
+                # Fallback: assign a default color from matplotlib's tab10 palette
+                import matplotlib
+                tab_colors = matplotlib.colormaps['tab10'].colors
+                color = tab_colors[i % len(tab_colors)]
             l, = ax.plot(times, y, label=y_labels[i], color=color)
             line_handles.append(l)
             ax.yaxis.label.set_color(color)

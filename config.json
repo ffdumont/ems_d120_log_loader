@@ -45,10 +45,10 @@
       "smooth": 9,
       "y_groups": [
         { "axis": 0, "label": "CHT (°F)", "series": [
-          { "column": "cht_1", "label": "CHT Cylinder 1" },
-          { "column": "cht_2", "label": "CHT Cylinder 2" },
-          { "column": "cht_3", "label": "CHT Cylinder 3" },
-          { "column": "cht_4", "label": "CHT Cylinder 4" }
+          { "column": "cht_1", "label": "CHT Cylinder 1", "color": "#1f77b4" },
+          { "column": "cht_2", "label": "CHT Cylinder 2", "color": "#ff7f0e" },
+          { "column": "cht_3", "label": "CHT Cylinder 3", "color": "#2ca02c" },
+          { "column": "cht_4", "label": "CHT Cylinder 4", "color": "#d62728" }
         ]}
       ]
     },
@@ -57,10 +57,10 @@
       "smooth": 9,
       "y_groups": [
         { "axis": 0, "label": "EGT (°F)", "series": [
-          { "column": "egt_1", "label": "EGT Cylinder 1" },
-          { "column": "egt_2", "label": "EGT Cylinder 2" },
-          { "column": "egt_3", "label": "EGT Cylinder 3" },
-          { "column": "egt_4", "label": "EGT Cylinder 4" }
+          { "column": "egt_1", "label": "EGT Cylinder 1", "color": "#1f77b4" },
+          { "column": "egt_2", "label": "EGT Cylinder 2", "color": "#ff7f0e" },
+          { "column": "egt_3", "label": "EGT Cylinder 3", "color": "#2ca02c" },
+          { "column": "egt_4", "label": "EGT Cylinder 4", "color": "#d62728" }
         ]}
       ]
     },
