@@ -4,6 +4,9 @@ import sqlite3
 import matplotlib.pyplot as plt
 import numpy as np
 from datetime import datetime
+import os
+import sys
+import subprocess
 
 DB_PATH = 'logs_test.sqlite'
 SEGMENTS_TABLE = 'flight_segments'
@@ -176,6 +179,34 @@ def moving_average_centered(data, window_size=5):
 
 def main():
     args = parse_args()
+    # Format flight folder name as flight_XXX
+    flight_folder = f"flight_{int(args.flight):03d}"
+    # Determine output base directory
+    output_base = args.output or "charts_output"
+    # If output is a file (endswith .png or .csv), use its parent as base
+    if output_base.endswith('.png') or output_base.endswith('.csv'):
+        output_base = os.path.dirname(output_base) or "charts_output"
+    # Full output directory for this flight
+    flight_dir = os.path.join(output_base, flight_folder)
+    os.makedirs(flight_dir, exist_ok=True)
+
+    if args.chart == "all":
+        # Batch mode: generate all charts for this flight
+        with open(CHART_SPEC_PATH, encoding='utf-8') as f:
+            spec = json.load(f)
+        charts = spec.get('charts', {})
+        for chart_type, chart_spec in charts.items():
+            print(f"Generating chart: {chart_spec.get('label', chart_type)} -> {flight_dir}/{flight_folder}_{chart_type}.png")
+            cmd = [
+                sys.executable, __file__,
+                "--flight", str(args.flight),
+                "--chart", chart_type,
+                "--output", os.path.join(flight_dir, f"{flight_folder}_{chart_type}.png"),
+                "--analyze"
+            ]
+            subprocess.run(cmd, check=True)
+        return
+
     chart_spec = load_chart_spec(args.chart)
     # --- Support both y_groups (new) and y_axes (legacy) ---
     if 'y_groups' in chart_spec:
@@ -270,28 +301,23 @@ def main():
     labs = [l.get_label() for l in line_handles]
     plt.legend(line_handles, labs, loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=3)
     plt.tight_layout(rect=[0, 0.08, 1, 1])
-    # Save chart as PNG automatically if --output not specified
+    # Change output_path logic:
     output_path = args.output
-    if not output_path:
-        output_path = f"chart_{args.chart}_flight{args.flight}.png"
+    if not output_path or output_path.endswith(f"{args.chart}.png") or not output_path.endswith('.png'):
+        output_path = os.path.join(flight_dir, f"{flight_folder}_{args.chart}.png")
     plt.savefig(output_path, bbox_inches='tight')
     print(f"Chart saved to {output_path}")
-    if not args.output:
-        plt.show()
-    # Optional analysis
+
+    # CSV output path (for stats)
     if hasattr(args, 'analyze') and args.analyze:
-        data_dict = {ycol: y_data[i] for i, ycol in enumerate(y_columns)}
-        stats = analyze_chart_data(data_dict)
-        print("\nStatistical summary:")
-        # Determine CSV path
-        csv_path = None
-        if hasattr(args, 'csv') and args.csv:
-            if args.csv.lower() == 'auto':
-                csv_path = f"stats_{args.chart}_flight{args.flight}.csv"
-            else:
-                csv_path = args.csv
-        elif hasattr(args, 'csv'):
-            csv_path = f"stats_{args.chart}_flight{args.flight}.csv"
+        stats = analyze_chart_data({ycol: y_data[i] for i, ycol in enumerate(y_columns)})
+        csv_path = os.path.join(flight_dir, f"{flight_folder}_{args.chart}.csv")
+        print(f"Statistical summary:")
+        print_stats_table(stats, csv_path=csv_path, flight_info=flight)
+    elif args.csv:
+        # If --csv is given without --analyze, still export stats
+        stats = analyze_chart_data({ycol: y_data[i] for i, ycol in enumerate(y_columns)})
+        csv_path = os.path.join(flight_dir, f"{flight_folder}_{args.chart}.csv")
         print_stats_table(stats, csv_path=csv_path, flight_info=flight)
     conn.close()
 
