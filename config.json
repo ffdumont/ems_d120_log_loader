@@ -1,4 +1,6 @@
 {
+  "input_path": "g:\\Mon Drive\\!2-Projects\\2366-2505 Dynon EMS-120 Data Log Analysis\\input\\",
+  "output_path": "g:\\Mon Drive\\!2-Projects\\2366-2505 Dynon EMS-120 Data Log Analysis\\output\\",
   "charts": {
     "engine_performance": {
       "label": "Engine Performance",

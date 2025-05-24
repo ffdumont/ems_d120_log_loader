@@ -8,7 +8,12 @@ import os
 import sys
 import subprocess
 
-DB_PATH = 'logs_test.sqlite'
+# Load config paths
+with open('config.json', encoding='utf-8') as _f:
+    _config = json.load(_f)
+INPUT_PATH = _config.get('input_path', 'data/')
+OUTPUT_PATH = _config.get('output_path', 'charts_output/')
+DB_PATH = os.path.join(OUTPUT_PATH, 'logs_test.sqlite')
 SEGMENTS_TABLE = 'flight_segments'
 LOG_TABLE = 'flight_log'
 CONFIG_PATH = 'config.json'
@@ -18,9 +23,10 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Generate flight chart from SQLite data and chart spec.")
     parser.add_argument('--flight', nargs='+', required=True, help='Flight ID (single: 3), range: 3 6, or all')
     parser.add_argument('--chart', type=str, required=True, help='Chart type (from config.json) or "all" for all charts')
-    parser.add_argument('--output', type=str, help='Output PNG file or output folder (optional)')
     parser.add_argument('--analyze', action='store_true', help='Print statistical summary for each Y variable')
     parser.add_argument('--csv', type=str, help='Export statistical summary to CSV file (optional)')
+    parser.add_argument('--markdown', action='store_true', help='Generate Markdown summary for Obsidian publication')
+    parser.add_argument('--html', action='store_true', help='Generate HTML summary report')
     return parser.parse_args()
 
 
@@ -173,6 +179,39 @@ def moving_average_centered(data, window_size=5):
     return smoothed
 
 
+def write_flight_markdown(flight_id, chart_files, flight_dir, flight_folder):
+    try:
+        os.makedirs(flight_dir, exist_ok=True)
+        md_path = os.path.join(flight_dir, f"{flight_folder}_summary.md")
+        print(f"Attempting to write Markdown summary to: {md_path}")
+        with open(md_path, 'w', encoding='utf-8') as md:
+            md.write(f"# Flight {flight_id} Charts & Statistics\n\n")
+            for chart_type, chart_label, chart_png, chart_csv in chart_files:
+                md.write(f"## {chart_label}\n\n")
+                md.write(f"![]({chart_png})\n\n")
+                # Insert stats table from CSV
+                csv_path = os.path.join(flight_dir, chart_csv)
+                if os.path.exists(csv_path):
+                    with open(csv_path, encoding='utf-8-sig') as f:
+                        lines = f.readlines()
+                    # Skip flight info row if present
+                    start = 0
+                    if lines and lines[0].startswith('flight_id:'):
+                        start = 1
+                    if len(lines) > start:
+                        headers = lines[start].strip().split(';')
+                        md.write('|' + '|'.join(headers) + '|\n')
+                        md.write('|' + '|'.join(['---']*len(headers)) + '|\n')
+                        for line in lines[start+1:]:
+                            cells = line.strip().split(';')
+                            md.write('|' + '|'.join(cells) + '|\n')
+                md.write('\n')
+    except Exception as e:
+        import traceback
+        print(f"ERROR in write_flight_markdown for flight {flight_id}: {e}")
+        traceback.print_exc()
+
+
 def main():
     args = parse_args()
     # Determine flight IDs to process
@@ -196,11 +235,9 @@ def main():
     for flight_id in flight_ids:
         # Format flight folder name as flight_XXX
         flight_folder = f"flight_{int(flight_id):03d}"
-        # Determine output base directory
-        output_base = args.output or "charts_output"
-        if output_base.endswith('.png') or output_base.endswith('.csv'):
-            output_base = os.path.dirname(output_base) or "charts_output"
-        # Only create one subfolder: charts_output/flight_XXX
+        # Always use OUTPUT_PATH from config.json for all outputs
+        output_base = OUTPUT_PATH
+        # Only create one subfolder: output_base/flight_XXX
         flight_dir = os.path.join(output_base, flight_folder)
         os.makedirs(flight_dir, exist_ok=True)
 
@@ -209,47 +246,57 @@ def main():
             with open(CONFIG_PATH, encoding='utf-8') as f:
                 config = json.load(f)
             charts = config.get('charts', {})
-            chart_files = []
+            # Run subprocesses for each chart
             for chart_type, chart_spec in charts.items():
-                print(f"Generating chart: {chart_spec.get('label', chart_type)} -> {flight_dir}/{flight_folder}_{chart_type}.png")
                 cmd = [
                     sys.executable, __file__,
                     "--flight", str(flight_id),
                     "--chart", chart_type,
                     "--analyze"
                 ]
+                if args.markdown:
+                    cmd.append("--markdown")
+                if args.html:
+                    cmd.append("--html")
                 subprocess.run(cmd, check=True)
-                # Collect generated files for HTML
+            # After all charts, re-scan for all PNG/CSV files and build chart_files
+            chart_files = []
+            for chart_type, chart_spec in charts.items():
                 chart_png = f"{flight_folder}_{chart_type}.png"
                 chart_csv = f"{flight_folder}_{chart_type}.csv"
-                chart_files.append((chart_type, chart_spec.get('label', chart_type), chart_png, chart_csv))
-            # After all charts, generate HTML summary for this flight
-            html_path = os.path.join(flight_dir, f"{flight_folder}_summary.html")
-            with open(html_path, 'w', encoding='utf-8') as html:
-                html.write(f"<html><head><title>Flight {flight_id} Charts & Stats</title><style>body{{font-family:sans-serif;}}table{{border-collapse:collapse;}}th,td{{border:1px solid #ccc;padding:4px;}}img{{max-width:800px;display:block;margin-bottom:8px;}}</style></head><body>")
-                html.write(f"<h1>Flight {flight_id} Charts & Statistics</h1>")
-                for chart_type, chart_label, chart_png, chart_csv in chart_files:
-                    html.write(f"<h2>{chart_label}</h2>")
-                    html.write(f'<img src="{chart_png}" alt="{chart_label}">')
-                    # Insert stats table from CSV
-                    csv_path = os.path.join(flight_dir, chart_csv)
-                    if os.path.exists(csv_path):
-                        with open(csv_path, encoding='utf-8-sig') as f:
-                            lines = f.readlines()
-                        # Skip flight info row if present
-                        start = 0
-                        if lines and lines[0].startswith('flight_id:'):
-                            start = 1
-                        if len(lines) > start:
-                            html.write('<table>')
-                            headers = lines[start].strip().split(';')
-                            html.write('<tr>' + ''.join(f'<th>{h}</th>' for h in headers) + '</tr>')
-                            for line in lines[start+1:]:
-                                cells = line.strip().split(';')
-                                html.write('<tr>' + ''.join(f'<td>{c}</td>' for c in cells) + '</tr>')
-                            html.write('</table>')
-                html.write("</body></html>")
-            print(f"HTML summary saved to {html_path}")
+                png_exists = os.path.exists(os.path.join(flight_dir, chart_png))
+                csv_exists = os.path.exists(os.path.join(flight_dir, chart_csv))
+                if png_exists and csv_exists:
+                    chart_files.append((chart_type, chart_spec.get('label', chart_type), chart_png, chart_csv))
+            # Now generate HTML and/or Markdown summary for this flight
+            if args.html:
+                html_path = os.path.join(flight_dir, f"{flight_folder}_summary.html")
+                with open(html_path, 'w', encoding='utf-8') as html:
+                    html.write(f"<html><head><title>Flight {flight_id} Charts & Stats</title><style>body{{font-family:sans-serif;}}table{{border-collapse:collapse;}}th,td{{border:1px solid #ccc;padding:4px;}}img{{max-width:800px;display:block;margin-bottom:8px;}}</style></head><body>")
+                    html.write(f"<h1>Flight {flight_id} Charts & Statistics</h1>")
+                    for chart_type, chart_label, chart_png, chart_csv in chart_files:
+                        html.write(f"<h2>{chart_label}</h2>")
+                        html.write(f'<img src="{chart_png}" alt="{chart_label}">')
+                        # Insert stats table from CSV
+                        csv_path = os.path.join(flight_dir, chart_csv)
+                        if os.path.exists(csv_path):
+                            with open(csv_path, encoding='utf-8-sig') as f:
+                                lines = f.readlines()
+                            # Skip flight info row if present
+                            start = 0
+                            if lines and lines[0].startswith('flight_id:'):
+                                start = 1
+                            if len(lines) > start:
+                                html.write('<table>')
+                                headers = lines[start].strip().split(';')
+                                html.write('<tr>' + ''.join(f'<th>{h}</th>' for h in headers) + '</tr>')
+                                for line in lines[start+1:]:
+                                    cells = line.strip().split(';')
+                                    html.write('<tr>' + ''.join(f'<td>{c}</td>' for c in cells) + '</tr>')
+                                html.write('</table>')
+                    html.write("</body></html>")
+            if args.markdown:
+                write_flight_markdown(flight_id, chart_files, flight_dir, flight_folder)
             continue  # Next flight
 
         chart_spec = load_chart_spec(args.chart)
@@ -369,9 +416,7 @@ def main():
         plt.legend(line_handles, labs, loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=3)
         plt.tight_layout(rect=[0, 0.08, 1, 1])
         # Change output_path logic:
-        output_path = args.output
-        if not output_path or output_path.endswith(f"{args.chart}.png") or not output_path.endswith('.png'):
-            output_path = os.path.join(flight_dir, f"{flight_folder}_{args.chart}.png")
+        output_path = os.path.join(flight_dir, f"{flight_folder}_{args.chart}.png")
         plt.savefig(output_path, bbox_inches='tight')
         print(f"Chart saved to {output_path}")
 
@@ -387,78 +432,8 @@ def main():
             print_stats_table(stats, csv_path=csv_path, flight_info=flight)
         conn.close()
 
-    # After all flights processed, if batch mode and multiple flights, create index.html in output_base
-    if args.chart == "all" and len(flight_ids) > 1:
-        # Gather all flight folders in output_base
-        flights_info = []
-        for flight_id in flight_ids:
-            flight_folder = f"flight_{int(flight_id):03d}"
-            flight_dir = os.path.join(output_base, flight_folder)
-            summary_html = os.path.join(flight_folder, f"{flight_folder}_summary.html")
-            # Try to get flight info from the first CSV or from DB
-            # Use engine_performance as a likely always-present chart
-            csv_path = os.path.join(flight_dir, f"{flight_folder}_engine_performance.csv")
-            if not os.path.exists(csv_path):
-                # fallback: any CSV
-                csvs = [f for f in os.listdir(flight_dir) if f.endswith('.csv')]
-                csv_path = os.path.join(flight_dir, csvs[0]) if csvs else None
-            date_str = hour_str = duration_str = "?"
-            year = month = None
-            if csv_path and os.path.exists(csv_path):
-                with open(csv_path, encoding='utf-8-sig') as f:
-                    first = f.readline()
-                # Try to parse flight info row
-                if first.startswith('flight_id:'):
-                    # Split by ',' but allow for possible missing fields
-                    parts = {}
-                    for s in first.strip().split(', '):
-                        if ': ' in s:
-                            k, v = s.split(': ', 1)
-                            parts[k] = v
-                    start_ts = parts.get('start_timestamp', '').replace('T', ' ').replace('Z', '')
-                    end_ts = parts.get('end_timestamp', '').replace('T', ' ').replace('Z', '')
-                    try:
-                        dt_start = datetime.strptime(start_ts, '%Y-%m-%d %H:%M:%S')
-                        dt_end = datetime.strptime(end_ts, '%Y-%m-%d %H:%M:%S')
-                        date_str = dt_start.strftime('%Y-%m-%d')
-                        hour_str = dt_start.strftime('%H:%M')
-                        duration = dt_end - dt_start
-                        duration_str = f"{duration.seconds//60} min"
-                        year = dt_start.year
-                        month = dt_start.month
-                    except Exception:
-                        year = month = None
-            flights_info.append({
-                'flight_id': flight_id,
-                'folder': flight_folder,
-                'summary_html': summary_html,
-                'date': date_str,
-                'hour': hour_str,
-                'duration': duration_str,
-                'year': year,
-                'month': month
-            })
-        # Group by year/month
-        from collections import defaultdict
-        grouped = defaultdict(lambda: defaultdict(list))
-        for info in flights_info:
-            if info['year'] and info['month']:
-                grouped[info['year']][info['month']].append(info)
-        # Write index.html
-        index_path = os.path.join(output_base, 'index.html')
-        with open(index_path, 'w', encoding='utf-8') as idx:
-            idx.write('<html><head><title>Flight Index</title><style>body{{font-family:sans-serif;}}table{{border-collapse:collapse;margin-bottom:24px;}}th,td{{border:1px solid #ccc;padding:4px;}}</style></head><body>')
-            idx.write('<h1>Flight Index</h1>')
-            for year in sorted(grouped.keys(), reverse=True):
-                idx.write(f'<h2>{year}</h2>')
-                for month in sorted(grouped[year].keys()):
-                    idx.write(f'<h3>{year}-{month:02d}</h3>')
-                    idx.write('<table><tr><th>Flight</th><th>Date</th><th>Hour</th><th>Duration</th><th>Report</th></tr>')
-                    for info in sorted(grouped[year][month], key=lambda x: x['date']):
-                        idx.write(f'<tr><td>{info["flight_id"]}</td><td>{info["date"]}</td><td>{info["hour"]}</td><td>{info["duration"]}</td><td><a href="{info["summary_html"]}">View</a></td></tr>')
-                    idx.write('</table>')
-            idx.write('</body></html>')
-        print(f"Flight index written to {index_path}")
+    # After all flights processed, if batch mode and multiple flights, create index.html and index.md in output_base
+    # (Removed: index generation now handled by generate_index.py)
 
 if __name__ == "__main__":
     main()
