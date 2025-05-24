@@ -2,6 +2,7 @@ import argparse
 import json
 import sqlite3
 import matplotlib.pyplot as plt
+import numpy as np
 from datetime import datetime
 
 DB_PATH = 'logs_test.sqlite'
@@ -15,6 +16,8 @@ def parse_args():
     parser.add_argument('--flight', type=int, required=True, help='Flight ID (from flight_segments)')
     parser.add_argument('--chart', type=str, required=True, help='Chart type (from chart_spec.json)')
     parser.add_argument('--output', type=str, help='Output PNG file (optional)')
+    parser.add_argument('--analyze', action='store_true', help='Print statistical summary for each Y variable')
+    parser.add_argument('--csv', type=str, help='Export statistical summary to CSV file (optional)')
     return parser.parse_args()
 
 
@@ -63,6 +66,93 @@ def reconstruct_time(row, col_idx):
         return t
     except Exception:
         return None
+
+
+def analyze_peaks(data: list[float]) -> dict:
+    arr = np.array([v for v in data if v is not None])
+    if arr.size == 0:
+        return {}
+    stats = {}
+    stats['count'] = int(arr.size)
+    stats['mean'] = float(np.mean(arr))
+    stats['median'] = float(np.median(arr))
+    stats['min'] = float(np.min(arr))
+    stats['max'] = float(np.max(arr))
+    stats['std'] = float(np.std(arr))
+    stats['q1'] = float(np.percentile(arr, 25))
+    stats['q3'] = float(np.percentile(arr, 75))
+    stats['iqr'] = stats['q3'] - stats['q1']
+    q3p = stats['q3'] + 1.5 * stats['iqr']
+    q1m = stats['q1'] - 1.5 * stats['iqr']
+    stats['spikes'] = int(np.sum(arr > q3p))
+    stats['dips'] = int(np.sum(arr < q1m))
+    stats['gt_mean_2std'] = int(np.sum(arr > stats['mean'] + 2*stats['std']))
+    stats['lt_mean_2std'] = int(np.sum(arr < stats['mean'] - 2*stats['std']))
+    stats['zero'] = int(np.sum(arr == 0))
+    stats['outliers'] = int(np.sum((arr < q1m) | (arr > q3p)))
+    return stats
+
+
+def analyze_chart_data(data_dict: dict) -> dict:
+    return {k: analyze_peaks(v) for k, v in data_dict.items()}
+
+
+def print_stats_table(stats: dict, csv_path: str = None, flight_info: dict = None):
+    headers = [
+        'Parameter', 'Count', 'Mean', 'Median', 'Min', 'Max', 'Std', 'Q1', 'Q3', 'IQR',
+        'Zero', '>Mean+2Std', '<Mean-2Std', 'Outliers'
+    ]
+    fmt = "{:<18} {:>6} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>6} {:>10} {:>10} {:>9}"
+    rows = []
+    for k, v in stats.items():
+        if not v:
+            continue
+        def fmt_num(val):
+            try:
+                # Format float with 3 decimals, use comma as decimal separator
+                return f"{float(val):.3f}".replace('.', ',')
+            except Exception:
+                return val
+        row = [
+            k,
+            v.get('count', ''),
+            fmt_num(v.get('mean', 0)),
+            fmt_num(v.get('median', 0)),
+            fmt_num(v.get('min', 0)),
+            fmt_num(v.get('max', 0)),
+            fmt_num(v.get('std', 0)),
+            fmt_num(v.get('q1', 0)),
+            fmt_num(v.get('q3', 0)),
+            fmt_num(v.get('iqr', 0)),
+            v.get('zero', 0),
+            v.get('gt_mean_2std', 0),
+            v.get('lt_mean_2std', 0),
+            v.get('outliers', 0),
+        ]
+        rows.append(row)
+    # Print table
+    print(fmt.format(*headers))
+    for row in rows:
+        print(fmt.format(*row))
+    # Optionally export to CSV
+    if csv_path:
+        import csv
+        headers_csv = [h.replace('σ', 'std').replace('Σ', 'Sum') for h in headers]
+        with open(csv_path, 'w', newline='', encoding='utf-8-sig') as f:
+            writer = csv.writer(f, delimiter=';')
+            # Write flight info as first row if provided
+            if flight_info:
+                flight_row = [
+                    f"flight_id: {flight_info.get('flight_id', '')}",
+                    f"start_timestamp: {flight_info.get('start_timestamp', '')}",
+                    f"end_timestamp: {flight_info.get('end_timestamp', '')}"
+                ]
+                writer.writerow(flight_row)
+            writer.writerow(headers_csv)
+            for row in rows:
+                row_csv = [str(cell).replace('.', ',') if isinstance(cell, float) or (isinstance(cell, str) and cell.replace(',', '').replace('.', '').isdigit() and '.' in cell) else str(cell) for cell in row]
+                writer.writerow(row_csv)
+        print(f"Statistical summary exported to {csv_path}")
 
 
 def main():
@@ -144,7 +234,26 @@ def main():
         print(f"Chart saved to {args.output}")
     else:
         plt.show()
+    # Optional analysis
+    if hasattr(args, 'analyze') and args.analyze:
+        data_dict = {ycol: y_data[i] for i, ycol in enumerate(y_columns)}
+        stats = analyze_chart_data(data_dict)
+        print("\nStatistical summary:")
+        csv_path = args.csv if hasattr(args, 'csv') and args.csv else None
+        print_stats_table(stats, csv_path=csv_path, flight_info=flight)
     conn.close()
 
 if __name__ == "__main__":
+    # Add --csv argument to parser
+    import sys
+    import argparse as _argparse
+    def _patched_parse_args():
+        parser = _argparse.ArgumentParser(description="Generate flight chart from SQLite data and chart spec.")
+        parser.add_argument('--flight', type=int, required=True, help='Flight ID (from flight_segments)')
+        parser.add_argument('--chart', type=str, required=True, help='Chart type (from chart_spec.json)')
+        parser.add_argument('--output', type=str, help='Output PNG file (optional)')
+        parser.add_argument('--analyze', action='store_true', help='Print statistical summary for each Y variable')
+        parser.add_argument('--csv', type=str, help='Export statistical summary to CSV file (optional)')
+        return parser.parse_args()
+    parse_args = _patched_parse_args
     main()
