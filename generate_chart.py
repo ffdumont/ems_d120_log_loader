@@ -11,13 +11,13 @@ import subprocess
 DB_PATH = 'logs_test.sqlite'
 SEGMENTS_TABLE = 'flight_segments'
 LOG_TABLE = 'flight_log'
-CHART_SPEC_PATH = 'chart_spec.json'
+CONFIG_PATH = 'config.json'
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate flight chart from SQLite data and chart spec.")
     parser.add_argument('--flight', type=int, required=True, help='Flight ID (from flight_segments)')
-    parser.add_argument('--chart', type=str, required=True, help='Chart type (from chart_spec.json)')
+    parser.add_argument('--chart', type=str, required=True, help='Chart type (from config.json)')
     parser.add_argument('--output', type=str, help='Output PNG file (optional)')
     parser.add_argument('--analyze', action='store_true', help='Print statistical summary for each Y variable')
     parser.add_argument('--csv', type=str, help='Export statistical summary to CSV file (optional)')
@@ -25,11 +25,11 @@ def parse_args():
 
 
 def load_chart_spec(chart_type):
-    with open(CHART_SPEC_PATH, encoding='utf-8') as f:
-        spec = json.load(f)
-    charts = spec.get('charts', {})
+    with open(CONFIG_PATH, encoding='utf-8') as f:
+        config = json.load(f)
+    charts = config.get('charts', {})
     if chart_type not in charts:
-        raise ValueError(f"Chart type '{chart_type}' not found in chart_spec.json")
+        raise ValueError(f"Chart type '{chart_type}' not found in config.json")
     return charts[chart_type]
 
 
@@ -192,9 +192,9 @@ def main():
 
     if args.chart == "all":
         # Batch mode: generate all charts for this flight
-        with open(CHART_SPEC_PATH, encoding='utf-8') as f:
-            spec = json.load(f)
-        charts = spec.get('charts', {})
+        with open(CONFIG_PATH, encoding='utf-8') as f:
+            config = json.load(f)
+        charts = config.get('charts', {})
         for chart_type, chart_spec in charts.items():
             print(f"Generating chart: {chart_spec.get('label', chart_type)} -> {flight_dir}/{flight_folder}_{chart_type}.png")
             cmd = [
