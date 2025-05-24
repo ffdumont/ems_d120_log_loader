@@ -1,0 +1,15 @@
+# Ignore chart output folders
+charts_output/
+
+# Ignore all PNG and CSV files in root and subfolders
+*.png
+*.csv
+
+# Ignore SQLite database files
+*.sqlite
+
+# Ignore Python cache
+__pycache__/
+
+# Ignore log files
+*.log

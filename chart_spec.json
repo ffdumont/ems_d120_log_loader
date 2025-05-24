@@ -2,25 +2,145 @@
   "charts": {
     "engine_performance": {
       "label": "Engine Performance",
+      "smooth": 7,
       "y_axes": [
         { "column": "rpm", "label": "RPM" },
         { "column": "man_pres", "label": "Manifold Pressure (inHg)" },
         { "column": "egt_1", "label": "EGT Cylinder 1 (°F)" }
+      ],
+      "y_groups": [
+        {
+          "axis": 0,
+          "label": "RPM",
+          "series": [{ "column": "rpm", "label": "RPM" }]
+        },
+        {
+          "axis": 1,
+          "label": "Manifold Pressure (inHg)",
+          "series": [
+            { "column": "man_pres", "label": "Manifold Pressure (inHg)" }
+          ]
+        },
+        {
+          "axis": 2,
+          "label": "EGT Cylinder 1 (°F)",
+          "series": [{ "column": "egt_1", "label": "EGT Cylinder 1 (°F)" }]
+        }
       ]
     },
     "climb_profile": {
       "label": "Climb Profile",
+      "smooth": 0,
       "y_axes": [
         { "column": "gps_alt", "label": "Altitude (ft)" },
         { "column": "grnd_spd", "label": "Ground Speed (kts)" }
+      ],
+      "y_groups": [
+        {
+          "axis": 0,
+          "label": "Altitude (ft)",
+          "series": [{ "column": "gps_alt", "label": "Altitude (ft)" }]
+        },
+        {
+          "axis": 1,
+          "label": "Ground Speed (kts)",
+          "series": [{ "column": "grnd_spd", "label": "Ground Speed (kts)" }]
+        }
       ]
     },
     "electrical_performance": {
       "label": "Electrical Performance",
+      "smooth": 0,
       "y_axes": [
         { "column": "rpm", "label": "RPM", "axis": 0 },
         { "column": "volts", "label": "Voltage (V)", "axis": 1 },
         { "column": "amps", "label": "Current (A)", "axis": 2 }
+      ],
+      "y_groups": [
+        {
+          "axis": 0,
+          "label": "RPM",
+          "series": [{ "column": "rpm", "label": "RPM" }]
+        },
+        {
+          "axis": 1,
+          "label": "Voltage (V)",
+          "series": [{ "column": "volts", "label": "Voltage (V)" }]
+        },
+        {
+          "axis": 2,
+          "label": "Current (A)",
+          "series": [{ "column": "amps", "label": "Current (A)" }]
+        }
+      ]
+    },
+    "cht_profile": {
+      "label": "CHT Profile",
+      "smooth": 9,
+      "y_groups": [
+        {
+          "axis": 0,
+          "label": "CHT (°F)",
+          "series": [
+            { "column": "cht_1", "label": "CHT Cylinder 1" },
+            { "column": "cht_2", "label": "CHT Cylinder 2" },
+            { "column": "cht_3", "label": "CHT Cylinder 3" },
+            { "column": "cht_4", "label": "CHT Cylinder 4" }
+          ]
+        }
+      ]
+    },
+    "egt_profile": {
+      "label": "EGT Profile",
+      "smooth": 9,
+      "y_groups": [
+        {
+          "axis": 0,
+          "label": "EGT (°F)",
+          "series": [
+            { "column": "egt_1", "label": "EGT Cylinder 1" },
+            { "column": "egt_2", "label": "EGT Cylinder 2" },
+            { "column": "egt_3", "label": "EGT Cylinder 3" },
+            { "column": "egt_4", "label": "EGT Cylinder 4" }
+          ]
+        }
+      ]
+    },
+    "engine_oil": {
+      "label": "Oil Pressure & Temperature",
+      "smooth": 3,
+      "y_groups": [
+        {
+          "axis": 0,
+          "label": "Oil Temperature (°F)",
+          "series": [{ "column": "oil_temp", "label": "Oil Temperature (°F)" }]
+        },
+        {
+          "axis": 1,
+          "label": "Oil Pressure (psi)",
+          "series": [{ "column": "oil_pres", "label": "Oil Pressure (psi)" }]
+        }
+      ]
+    },
+    "flight_profile": {
+      "label": "Flight Profile",
+      "smooth": 0,
+      "y_groups": [
+        {
+          "axis": 0,
+          "label": "Altitude (ft)",
+          "series": [{ "column": "gps_alt", "label": "Altitude (ft)" }]
+        },
+        {
+          "axis": 1,
+          "label": "Ground Speed (kts)",
+          "series": [{ "column": "grnd_spd", "label": "Ground Speed (kts)" }]
+        },
+        {
+          "axis": 2,
+          "label": "RPM",
+          "series": [{ "column": "rpm", "label": "RPM" }]
+        }
       ]
     }
   }

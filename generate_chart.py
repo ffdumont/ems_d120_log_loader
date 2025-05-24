@@ -179,19 +179,33 @@ def moving_average_centered(data, window_size=5):
 def main():
     args = parse_args()
     chart_spec = load_chart_spec(args.chart)
-    y_axes = chart_spec['y_axes']
-    y_columns = [y['column'] for y in y_axes]
-    y_labels = [y['label'] for y in y_axes]
+    # --- Support both y_groups (new) and y_axes (legacy) ---
+    if 'y_groups' in chart_spec:
+        y_groups = chart_spec['y_groups']
+        y_columns = []
+        y_labels = []
+        axis_indices = []
+        for group in y_groups:
+            axis = group.get('axis', 0)
+            for series in group.get('series', []):
+                y_columns.append(series['column'])
+                y_labels.append(series['label'])
+                axis_indices.append(axis)
+    elif 'y_axes' in chart_spec:
+        y_axes = chart_spec['y_axes']
+        y_columns = [y['column'] for y in y_axes]
+        y_labels = [y['label'] for y in y_axes]
+        axis_indices = [y.get('axis', i) for i, y in enumerate(y_axes)]
+    else:
+        raise ValueError('Chart spec must have either y_groups or y_axes')
     conn = sqlite3.connect(DB_PATH)
     flight = get_flight_segment(conn, args.flight)
     start_rowid = flight['start_rowid']
     end_rowid = flight['end_rowid']
     data, colnames = get_flight_data(conn, start_rowid, end_rowid, y_columns)
     col_idx = {name: i+1 for i, name in enumerate(y_columns)}  # +1 because rowid is at 0
-    # Add time columns
     for tcol in ['zulu_year', 'zulu_mo', 'zulu_day', 'zulu_hour', 'zulu_min', 'zulu_sec']:
         col_idx[tcol] = colnames.index(tcol)
-    # Build time axis
     times = []
     y_data = [[] for _ in y_columns]
     t0 = None
@@ -219,8 +233,6 @@ def main():
         plot_y_data = y_data
         title_suffix = ""
     # Plot with support for multiple y-axes
-    # Prepare axis assignment and colors
-    axis_indices = [y.get('axis', i) for i, y in enumerate(y_axes)]
     axis_colors = ['tab:blue', 'tab:orange', 'tab:green']
     axes = [None, None, None]
     fig, ax1 = plt.subplots(figsize=(10, 6))
@@ -241,19 +253,20 @@ def main():
         color = axis_colors[axis_idx % len(axis_colors)]
         l, = ax.plot(times, y, label=y_labels[i], color=color)
         line_handles.append(l)
-        # Set y-label color and tick color
         ax.yaxis.label.set_color(color)
         ax.tick_params(axis='y', colors=color)
     # Set axis labels
     ax1.set_xlabel('Time since start of flight (min)')
-    if axes[0]:
-        axes[0].set_ylabel(y_labels[axis_indices.index(0)])
-    if axes[1]:
-        axes[1].set_ylabel(y_labels[axis_indices.index(1)])
-    if axes[2]:
-        axes[2].set_ylabel(y_labels[axis_indices.index(2)])
+    # Set y-labels for each axis (use first label for each axis)
+    for axis in range(3):
+        if axes[axis]:
+            try:
+                label_idx = axis_indices.index(axis)
+                axes[axis].set_ylabel(y_labels[label_idx])
+            except ValueError:
+                pass
     # Title
-    title = f"Flight {args.flight}: {chart_spec.get('label', args.chart)}{title_suffix}\n{flight['start_timestamp']} to {flight['end_timestamp']}"
+    title = f"Flight {args.flight}: {chart_spec.get('label', args.chart)}{title_suffix}\n{flight['start_timestamp']} to {flight['end_rowid']}"
     plt.title(title)
     # Combine all legend entries
     labs = [l.get_label() for l in line_handles]
